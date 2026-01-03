@@ -405,14 +405,19 @@
 
     function setupCanvas() {
       const rect = canvas.getBoundingClientRect();
-      // DPR 스케일링 제거 - CSS 크기와 캔버스 크기를 동일하게
+      
+      // 실제 렌더링된 크기로 캔버스 설정
       canvas.width = Math.floor(rect.width);
       canvas.height = Math.floor(rect.height);
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      // scale 제거 - 1:1 매핑
       
-      // 캔버스를 투명하게 초기화 (배경 없음)
-      ctx.clearRect(0, 0, rect.width, rect.height);
+      // 변환 초기화
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      
+      // 캔버스를 투명하게 초기화
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      console.log('캔버스 크기:', canvas.width, 'x', canvas.height);
+      console.log('CSS 크기:', rect.width, 'x', rect.height);
     }
 
     setupCanvas();
@@ -429,11 +434,11 @@
       const clientX = e.touches ? e.touches[0].clientX : e.clientX;
       const clientY = e.touches ? e.touches[0].clientY : e.clientY;
       
-      // CSS 크기 기준으로 좌표 계산 (스케일링 보정 없이)
-      return { 
-        x: clientX - rect.left, 
-        y: clientY - rect.top
-      };
+      // 터치 위치 계산
+      const x = clientX - rect.left;
+      const y = clientY - rect.top;
+      
+      return { x, y };
     }
 
     function calcSpeed(p, t) {
@@ -610,9 +615,11 @@
       document.querySelector('.canvas-container').classList.add('fullscreen');
       document.querySelector('.action-buttons').classList.add('fullscreen');
       
-      // 캔버스 크기 재조정
-      setupCanvas();
-      console.log('전체화면 모드 진입');
+      // 전체화면 전환 후 캔버스 크기 재조정 (애니메이션 완료 후)
+      setTimeout(() => {
+        setupCanvas();
+        console.log('전체화면 모드 진입 - 캔버스 크기 재조정 완료');
+      }, 600);
     }
 
     // 전체화면 모드 해제 (필요시)
