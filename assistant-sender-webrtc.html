@@ -4,11 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <!-- 화면 방향 세로 고정 -->
-  <meta name="screen-orientation" content="portrait" />
-  <meta name="x5-orientation" content="portrait" />
   <title>조수용 송신 앱 - WebRTC</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -180,7 +175,7 @@
     }
     .canvas-container.fullscreen #canvas {
       width: 100vw;
-      height: calc(100vh - 70px);
+      height: calc(100vh - 80px); /* 버튼 영역(70px) + 여유(10px) */
       border: none;
       border-radius: 0;
     }
@@ -199,14 +194,15 @@
     }
     .action-buttons.fullscreen {
       position: fixed;
-      bottom: 20px;
-      left: 20px;
-      right: 20px;
+      bottom: 10px;
+      left: 10px;
+      right: 10px;
       z-index: 1001;
       display: flex;
       justify-content: space-between;
       gap: 10px;
-      opacity: 0.9;
+      opacity: 0.85;
+      pointer-events: auto;
     }
     .action-btn {
       padding: 18px;
@@ -218,12 +214,13 @@
       transition: all 0.3s ease;
       box-shadow: 0 5px 15px rgba(0,0,0,0.2);
       user-select: none;
+      touch-action: manipulation;
     }
     .action-buttons.fullscreen .action-btn {
-      padding: 12px 20px;
+      padding: 10px 18px;
       font-size: 14px;
       border-radius: 8px;
-      box-shadow: 0 3px 10px rgba(0,0,0,0.3);
+      box-shadow: 0 3px 10px rgba(0,0,0,0.4);
     }
     .action-btn:active { transform: translateY(2px); box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
     .clear-btn { background: #ff6b6b; color: white; }
