@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>조수용 송신 앱 - WebRTC</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+      touch-action: none;
+    }
+    .container { max-width: 600px; margin: 0 auto; }
+    
+    /* 연결 상태 헤더 */
+    .header {
+      background: white;
+      border-radius: 15px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+    .header h1 { font-size: 24px; color: #333; margin-bottom: 15px; }
+    
+    .connection-box {
+      background: #f8f9fa;
+      border-radius: 12px;
+      padding: 15px;
+      margin-bottom: 15px;
+    }
+    .connection-code {
+      text-align: center;
+      padding: 15px;
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      border-radius: 10px;
+      margin-bottom: 10px;
+    }
+    .code-label {
+      color: white;
+      font-size: 14px;
+      opacity: 0.9;
+      margin-bottom: 5px;
+    }
+    .code-value {
+      color: white;
+      font-size: 36px;
+      font-weight: bold;
+      letter-spacing: 8px;
+      font-family: 'Courier New', monospace;
+    }
+    
+    .connection-status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px;
+      background: white;
+      border-radius: 8px;
+    }
+    .status-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #ccc;
+      transition: all 0.3s ease;
+    }
+    .status-dot.waiting { background: #ffa500; box-shadow: 0 0 10px #ffa500; animation: blink 1.5s infinite; }
+    .status-dot.connected { background: #00ff00; box-shadow: 0 0 10px #00ff00; animation: pulse 2s infinite; }
+    .status-text { font-size: 14px; color: #666; flex: 1; }
+    
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.2); } }
+    
+    .network-guide {
+      background: #e3f2fd;
+      border-left: 4px solid #2196f3;
+      padding: 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #1976d2;
+      line-height: 1.6;
+    }
+
+    /* 캔버스 영역 */
+    .canvas-container {
+      background: white;
+      border-radius: 15px;
+      padding: 15px;
+      margin-bottom: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+    }
+    .canvas-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+    .canvas-header h2 { font-size: 18px; color: #333; }
+    .tool-buttons { display: flex; gap: 10px; }
+    .tool-btn {
+      padding: 8px 15px;
+      background: #f5f5f5;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      user-select: none;
+    }
+    .tool-btn:active { transform: scale(0.95); }
+    .tool-btn.active {
+      background: #667eea;
+      color: white;
+      border-color: #667eea;
+    }
+
+    #canvas {
+      display: block;
+      width: 100%;
+      height: 400px;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      touch-action: none;
+      cursor: crosshair;
+      background: #1a3a1a;
+      background-image:
+        radial-gradient(ellipse at 20% 30%, rgba(60,100,60,0.3) 0%, transparent 40%),
+        radial-gradient(ellipse at 80% 70%, rgba(20,40,20,0.4) 0%, transparent 40%),
+        radial-gradient(circle at 50% 50%, rgba(255,255,255,0.015) 0%, transparent 100%),
+        repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(255,255,255,0.008) 3px, rgba(255,255,255,0.008) 4px),
+        repeating-linear-gradient(90deg, transparent, transparent 3px, rgba(255,255,255,0.005) 3px, rgba(255,255,255,0.005) 4px);
+      box-shadow:
+        inset 0 0 80px rgba(0,0,0,0.4),
+        inset 10px 0 40px rgba(0,0,0,0.3),
+        inset -10px 0 40px rgba(0,0,0,0.3);
+    }
+
+    /* 액션 버튼 */
+    .action-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+    .action-btn {
+      padding: 18px;
+      border: none;
+      border-radius: 12px;
+      font-size: 18px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+      user-select: none;
+    }
+    .action-btn:active { transform: translateY(2px); box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+    .clear-btn { background: #ff6b6b; color: white; }
+    .send-btn { background: #51cf66; color: white; }
+    .send-btn:disabled { background: #ccc; cursor: not-allowed; }
+
+    /* 상태 메시지 */
+    .status-message {
+      background: white;
+      border-radius: 15px;
+      padding: 20px;
+      text-align: center;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+      margin-top: 20px;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: all 0.3s ease;
+    }
+    .status-message.show { opacity: 1; transform: translateY(0); }
+    .status-message.success { background: linear-gradient(135deg, #51cf66, #37b24d); color: white; }
+    .status-message.error { background: linear-gradient(135deg, #ff6b6b, #fa5252); color: white; }
+    .status-message.sending { background: linear-gradient(135deg, #4c6ef5, #3b5bdb); color: white; }
+    .status-icon { font-size: 48px; margin-bottom: 10px; }
+    .status-title { font-size: 24px; font-weight: bold; margin-bottom: 10px; }
+    .status-description { font-size: 14px; opacity: 0.9; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- 연결 상태 헤더 -->
+    <div class="header">
+      <h1>🎩 조수용 송신 앱</h1>
+      
+      <div class="connection-box">
+        <div class="connection-code">
+          <div class="code-label">무대 아이패드에 입력할 코드</div>
+          <div class="code-value" id="connectionCode">------</div>
+        </div>
+        
+        <div class="connection-status">
+          <div class="status-dot" id="statusDot"></div>
+          <span class="status-text" id="statusText">연결 준비 중...</span>
+        </div>
+      </div>
+      
+      <div class="network-guide">
+        💡 <strong>사용 방법:</strong><br>
+        1. 핫스팟 켜거나 같은 Wi-Fi에 연결<br>
+        2. 무대 아이패드에서 위 코드 입력<br>
+        3. 연결되면 손글씨 전송 가능!
+      </div>
+    </div>
+
+    <!-- 캔버스 영역 -->
+    <div class="canvas-container">
+      <div class="canvas-header">
+        <h2>✏️ 손글씨로 적기</h2>
+        <div class="tool-buttons">
+          <button class="tool-btn active" data-tool="pen" onclick="selectTool('pen')">흰 분필</button>
+          <button class="tool-btn" data-tool="thick" onclick="selectTool('thick')">굵게</button>
+          <button class="tool-btn" data-tool="eraser" onclick="selectTool('eraser')">지우개</button>
+        </div>
+      </div>
+      <canvas id="canvas"></canvas>
+    </div>
+
+    <!-- 액션 버튼 -->
+    <div class="action-buttons">
+      <button class="action-btn clear-btn" onclick="clearCanvas()">🗑️ 지우기</button>
+      <button class="action-btn send-btn" id="sendBtn" onclick="sendHandwriting()" disabled>📤 전송하기</button>
+    </div>
+
+    <!-- 상태 메시지 -->
+    <div class="status-message" id="statusMessage">
+      <div class="status-icon" id="statusIcon"></div>
+      <div class="status-title" id="statusTitle"></div>
+      <div class="status-description" id="statusDescription"></div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <script>
+    // 연결 코드 생성
+    function generateCode() {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 헷갈리는 문자 제외
+      let code = '';
+      for (let i = 0; i < 6; i++) {
+        code += chars[Math.floor(Math.random() * chars.length)];
+      }
+      return code;
+    }
+
+    const myCode = 'SENDER-' + generateCode();
+    document.getElementById('connectionCode').textContent = myCode.replace('SENDER-', '');
+
+    // PeerJS 초기화
+    let peer = null;
+    let connection = null;
+    let isConnected = false;
+
+    try {
+      peer = new Peer(myCode, {
+        config: {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' },
+            { urls: 'stun:stun1.l.google.com:19302' }
+          ]
+        }
+      });
+
+      peer.on('open', (id) => {
+        console.log('Peer 준비 완료:', id);
+        document.getElementById('statusText').textContent = '무대 아이패드 연결 대기 중...';
+        document.getElementById('statusDot').classList.add('waiting');
+        showStatus('success', '✓', '준비 완료!', '무대 아이패드에서 코드를 입력하세요');
+      });
+
+      peer.on('connection', (conn) => {
+        connection = conn;
+        console.log('연결 시도 감지');
+
+        conn.on('open', () => {
+          isConnected = true;
+          document.getElementById('statusText').textContent = '무대 아이패드와 연결됨 ✓';
+          document.getElementById('statusDot').classList.remove('waiting');
+          document.getElementById('statusDot').classList.add('connected');
+          document.getElementById('sendBtn').disabled = false;
+          showStatus('success', '🎉', '연결 성공!', '이제 손글씨를 전송할 수 있습니다');
+        });
+
+        conn.on('close', () => {
+          isConnected = false;
+          document.getElementById('statusText').textContent = '연결 끊김 - 재연결 대기 중...';
+          document.getElementById('statusDot').classList.remove('connected');
+          document.getElementById('statusDot').classList.add('waiting');
+          document.getElementById('sendBtn').disabled = true;
+          showStatus('error', '⚠️', '연결 끊김', '무대 아이패드를 확인하세요');
+        });
+
+        conn.on('error', (err) => {
+          console.error('연결 오류:', err);
+        });
+      });
+
+      peer.on('error', (err) => {
+        console.error('Peer 오류:', err);
+        showStatus('error', '❌', '오류 발생', err.message);
+      });
+
+    } catch (error) {
+      console.error('PeerJS 초기화 오류:', error);
+      showStatus('error', '❌', '초기화 실패', error.message);
+    }
+
+    // 캔버스 설정
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d', { willReadFrequently: false });
+    let isDrawing = false;
+    let currentTool = 'pen';
+    let lastPos = null;
+    let lastTime = 0;
+
+    const chalk = {
+      baseWidth: 15,
+      thickWidth: 22,
+      density: 40,
+      spread: 0.1,
+      roughness: 0.9
+    };
+
+    function rand(min, max) { return Math.random() * (max - min) + min; }
+    function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+    function setupCanvas() {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.floor(rect.width * dpr);
+      canvas.height = Math.floor(rect.height * dpr);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.scale(dpr, dpr);
+      paintBoardTexture(rect.width, rect.height);
+    }
+
+    function paintBoardTexture(w, h) {
+      ctx.clearRect(0, 0, w, h);
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = 'rgba(18, 44, 18, 0.35)';
+      ctx.fillRect(0, 0, w, h);
+      ctx.globalAlpha = 0.06;
+      for (let i = 0; i < 1200; i++) {
+        const x = Math.random() * w;
+        const y = Math.random() * h;
+        const a = Math.random() * 0.4;
+        ctx.fillStyle = `rgba(255,255,255,${a})`;
+        ctx.fillRect(x, y, Math.random()*1.2, Math.random()*1.2);
+      }
+      ctx.globalAlpha = 0.05;
+      for (let x = 0; x < w; x += 6) {
+        ctx.fillStyle = `rgba(0,0,0,${Math.random()*0.08})`;
+        ctx.fillRect(x + rand(-1,1), 0, 1, h);
+      }
+      ctx.globalAlpha = 0.18;
+      const grad = ctx.createRadialGradient(w*0.5, h*0.5, Math.min(w,h)*0.2, w*0.5, h*0.5, Math.max(w,h)*0.7);
+      grad.addColorStop(0, 'rgba(0,0,0,0)');
+      grad.addColorStop(1, 'rgba(0,0,0,0.35)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+      ctx.restore();
+    }
+
+    setupCanvas();
+    window.addEventListener('resize', setupCanvas);
+
+    window.selectTool = function(tool) {
+      currentTool = tool;
+      document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelector(`[data-tool="${tool}"]`).classList.add('active');
+    };
+
+    function getPosition(e) {
+      const rect = canvas.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      return { x: clientX - rect.left, y: clientY - rect.top };
+    }
+
+    function calcSpeed(p, t) {
+      if (!lastPos) return 0.5;
+      const dx = p.x - lastPos.x;
+      const dy = p.y - lastPos.y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      const dt = Math.max(1, t - lastTime);
+      return dist / dt;
+    }
+
+    function drawChalkParticles(x, y, w, speed) {
+      const baseCount = (currentTool === 'thick') ? chalk.density * 1.5 : chalk.density;
+      const count = Math.floor(baseCount * (1 + speed * 0.3));
+      
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-over';
+      
+      for (let i = 0; i < count; i++) {
+        const u1 = Math.random();
+        const u2 = Math.random();
+        const gaussian = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+        
+        const spreadX = gaussian * w * chalk.spread * rand(0.35, 0.65);
+        const spreadY = gaussian * w * chalk.spread * rand(0.35, 0.65);
+        
+        const px = x + spreadX;
+        const py = y + spreadY;
+        
+        const distFromCenter = Math.sqrt(spreadX*spreadX + spreadY*spreadY);
+        const maxDist = w * chalk.spread;
+        const alphaFalloff = 1 - clamp(distFromCenter / maxDist, 0, 0.7);
+        
+        const size = rand(0.3, 2.0) * (currentTool === 'thick' ? 1.4 : 1.0);
+        const baseAlpha = rand(0.15, 0.35) * alphaFalloff;
+        
+        const r = 230 + rand(-8, 5);
+        const g = 235 + rand(-12, 6);
+        const b = 228 + rand(-10, 8);
+        
+        ctx.fillStyle = `rgba(${r|0}, ${g|0}, ${b|0}, ${baseAlpha})`;
+        
+        if (Math.random() > 0.3) {
+          ctx.beginPath();
+          ctx.arc(px, py, size, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.fillRect(px - size/2, py - size/2, size * rand(0.8, 1.3), size * rand(0.8, 1.3));
+        }
+      }
+      
+      ctx.restore();
+    }
+
+    function startDrawing(e) {
+      isDrawing = true;
+      const pos = getPosition(e);
+      lastPos = pos;
+      lastTime = Date.now();
+      
+      if (currentTool !== 'eraser') {
+        const w = (currentTool === 'thick') ? chalk.thickWidth : chalk.baseWidth;
+        drawChalkParticles(pos.x, pos.y, w, 0);
+      }
+    }
+
+    function draw(e) {
+      if (!isDrawing) return;
+      
+      const pos = getPosition(e);
+      const now = Date.now();
+      
+      if (currentTool === 'eraser') {
+        ctx.save();
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.lineWidth = 40;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(lastPos.x, lastPos.y);
+        ctx.lineTo(pos.x, pos.y);
+        ctx.stroke();
+        ctx.restore();
+        lastPos = pos;
+        lastTime = now;
+        return;
+      }
+      
+      const speed = calcSpeed(pos, now);
+      const w = (currentTool === 'thick') ? chalk.thickWidth : chalk.baseWidth;
+      
+      const dx = pos.x - lastPos.x;
+      const dy = pos.y - lastPos.y;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      const steps = Math.max(1, Math.floor(dist / 2));
+      
+      for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        const ix = lastPos.x + dx * t;
+        const iy = lastPos.y + dy * t;
+        
+        const jitterX = rand(-chalk.roughness, chalk.roughness);
+        const jitterY = rand(-chalk.roughness, chalk.roughness);
+        
+        drawChalkParticles(ix + jitterX, iy + jitterY, w, speed);
+      }
+      
+      lastPos = pos;
+      lastTime = now;
+    }
+
+    function stopDrawing() {
+      isDrawing = false;
+      lastPos = null;
+      lastTime = 0;
+    }
+
+    canvas.addEventListener('mousedown', startDrawing);
+    canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('mouseup', stopDrawing);
+    canvas.addEventListener('mouseout', stopDrawing);
+    canvas.addEventListener('touchstart', (e) => { e.preventDefault(); startDrawing(e); }, { passive: false });
+    canvas.addEventListener('touchmove', (e) => { e.preventDefault(); draw(e); }, { passive: false });
+    canvas.addEventListener('touchend', (e) => { e.preventDefault(); stopDrawing(); }, { passive: false });
+
+    window.clearCanvas = function() {
+      const rect = canvas.getBoundingClientRect();
+      paintBoardTexture(rect.width, rect.height);
+      showStatus('success', '🧽', '지움 완료', '칠판이 깨끗해졌습니다');
+    };
+
+    window.sendHandwriting = function() {
+      if (!isConnected || !connection) {
+        showStatus('error', '❌', '연결 안됨', '무대 아이패드와 연결을 확인하세요');
+        return;
+      }
+      
+      showStatus('sending', '📤', '전송중...', '손글씨를 무대로 보내고 있습니다');
+      
+      try {
+        const imageData = canvas.toDataURL('image/jpeg', 0.85);
+        connection.send({
+          type: 'handwriting',
+          image: imageData,
+          timestamp: Date.now()
+        });
+        
+        console.log('손글씨 전송 완료');
+        showStatus('success', '✓', '전송 완료!', '무대 아이패드가 손글씨를 수신합니다');
+      } catch (error) {
+        console.error('전송 오류:', error);
+        showStatus('error', '❌', '전송 실패', error.message);
+      }
+    };
+
+    function showStatus(type, icon, title, description) {
+      const statusMessage = document.getElementById('statusMessage');
+      const statusIcon = document.getElementById('statusIcon');
+      const statusTitle = document.getElementById('statusTitle');
+      const statusDescription = document.getElementById('statusDescription');
+      statusMessage.className = `status-message show ${type}`;
+      statusIcon.textContent = icon;
+      statusTitle.textContent = title;
+      statusDescription.textContent = description;
+      setTimeout(() => statusMessage.classList.remove('show'), 3000);
+    }
+  </script>
+</body>
+</html>

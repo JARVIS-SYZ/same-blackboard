@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <title>무대용 칠판 (아이패드) - WebRTC</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            touch-action: none;
+            background: #000;
+        }
+        
+        /* 대기 화면: 코드 입력 */
+        #waitingScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            transition: opacity 0.5s ease;
+        }
+        
+        #waitingScreen.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .waiting-container {
+            text-align: center;
+            padding: 40px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            max-width: 500px;
+        }
+        
+        .waiting-title {
+            color: white;
+            font-size: 32px;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        
+        .waiting-subtitle {
+            color: rgba(255,255,255,0.7);
+            font-size: 18px;
+            margin-bottom: 40px;
+        }
+        
+        .code-input-container {
+            margin-bottom: 30px;
+        }
+        
+        .code-input {
+            width: 100%;
+            max-width: 350px;
+            padding: 20px;
+            font-size: 36px;
+            text-align: center;
+            letter-spacing: 12px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 15px;
+            background: rgba(255,255,255,0.1);
+            color: white;
+            font-family: 'Courier New', monospace;
+            text-transform: uppercase;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+        
+        .code-input:focus {
+            border-color: #667eea;
+            background: rgba(102,126,234,0.2);
+        }
+        
+        .connect-btn {
+            padding: 18px 60px;
+            font-size: 20px;
+            font-weight: bold;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 20px rgba(102,126,234,0.4);
+        }
+        
+        .connect-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102,126,234,0.6);
+        }
+        
+        .connect-btn:active {
+            transform: translateY(0);
+        }
+        
+        .connect-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+        
+        .status-indicator {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #666;
+            margin: 20px auto 15px;
+            transition: all 0.3s ease;
+        }
+        
+        .status-indicator.connecting {
+            background: #ffa500;
+            box-shadow: 0 0 20px #ffa500;
+            animation: pulse 1.5s infinite;
+        }
+        
+        .status-indicator.connected {
+            background: #00ff00;
+            box-shadow: 0 0 20px #00ff00;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-indicator.error {
+            background: #ff4444;
+            box-shadow: 0 0 20px #ff4444;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.2); }
+        }
+        
+        .status-text {
+            color: rgba(255,255,255,0.8);
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        
+        .network-info {
+            margin-top: 30px;
+            padding: 20px;
+            background: rgba(33,150,243,0.1);
+            border-radius: 12px;
+            border-left: 4px solid #2196f3;
+        }
+        
+        .network-info-title {
+            color: #64b5f6;
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .network-info-text {
+            color: rgba(255,255,255,0.6);
+            font-size: 13px;
+            line-height: 1.6;
+        }
+        
+        /* 공개 화면: 손글씨 표시 */
+        #revealScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #1a3a1a;
+            background-image:
+                radial-gradient(ellipse at 20% 30%, rgba(60,100,60,0.3) 0%, transparent 40%),
+                radial-gradient(ellipse at 80% 70%, rgba(20,40,20,0.4) 0%, transparent 40%),
+                radial-gradient(circle at 50% 50%, rgba(255,255,255,0.015) 0%, transparent 100%),
+                repeating-linear-gradient(
+                    0deg,
+                    transparent,
+                    transparent 3px,
+                    rgba(255,255,255,0.008) 3px,
+                    rgba(255,255,255,0.008) 4px
+                ),
+                repeating-linear-gradient(
+                    90deg,
+                    transparent,
+                    transparent 3px,
+                    rgba(255,255,255,0.005) 3px,
+                    rgba(255,255,255,0.005) 4px
+                );
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.5s ease;
+            box-shadow: 
+                inset 0 0 150px rgba(0,0,0,0.4),
+                inset 20px 0 80px rgba(0,0,0,0.3),
+                inset -20px 0 80px rgba(0,0,0,0.3),
+                inset 0 20px 80px rgba(0,0,0,0.3),
+                inset 0 -20px 80px rgba(0,0,0,0.3);
+        }
+        
+        #revealScreen.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        
+        #handwritingDisplay {
+            max-width: 90%;
+            max-height: 90%;
+            object-fit: contain;
+            opacity: 0;
+            transform: scale(0.9);
+            transition: all 0.5s ease;
+        }
+        
+        #handwritingDisplay.show {
+            opacity: 1;
+            transform: scale(1);
+        }
+        
+        /* 숨겨진 트리거 버튼 (화면 4개 코너 더블탭으로 대기 화면 복귀) */
+        .trigger-zone {
+            position: absolute;
+            width: 100px;
+            height: 100px;
+            z-index: 200;
+        }
+        
+        .trigger-zone.top-left { top: 0; left: 0; }
+        .trigger-zone.top-right { top: 0; right: 0; }
+        .trigger-zone.bottom-left { bottom: 0; left: 0; }
+        .trigger-zone.bottom-right { bottom: 0; right: 0; }
+        
+        /* 연결 상태 미니 인디케이터 (공개 화면에서 보임) */
+        .mini-status {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            background: #00ff00;
+            box-shadow: 0 0 15px #00ff00;
+            z-index: 150;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+        
+        .mini-status.visible {
+            opacity: 0.7;
+        }
+        
+        .mini-status.disconnected {
+            background: #ff4444;
+            box-shadow: 0 0 15px #ff4444;
+            animation: blink 1s infinite;
+        }
+        
+        @keyframes blink {
+            0%, 100% { opacity: 0.7; }
+            50% { opacity: 0.2; }
+        }
+    </style>
+</head>
+<body>
+    <!-- 대기 화면 -->
+    <div id="waitingScreen">
+        <div class="waiting-container">
+            <div class="waiting-title">🎪 무대용 칠판</div>
+            <div class="waiting-subtitle">조수 앱에 표시된 6자리 코드를 입력하세요</div>
+            
+            <div class="code-input-container">
+                <input 
+                    type="text" 
+                    id="codeInput" 
+                    class="code-input" 
+                    placeholder="------" 
+                    maxlength="6"
+                    autocomplete="off"
+                    autocapitalize="characters"
+                >
+            </div>
+            
+            <button id="connectBtn" class="connect-btn" onclick="connectToPeer()">
+                🔗 연결하기
+            </button>
+            
+            <div class="status-indicator" id="statusIndicator"></div>
+            <div class="status-text" id="statusText">코드를 입력하고 연결 버튼을 누르세요</div>
+            
+            <div class="network-info">
+                <div class="network-info-title">📡 네트워크 설정 확인</div>
+                <div class="network-info-text">
+                    • 조수 스마트폰과 <strong>같은 Wi-Fi</strong>에 연결하세요<br>
+                    • 또는 조수 스마트폰의 <strong>핫스팟</strong>에 연결하세요<br>
+                    • 연결 후 손글씨가 실시간으로 전송됩니다
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 공개 화면 -->
+    <div id="revealScreen">
+        <img id="handwritingDisplay" alt="예언 손글씨">
+    </div>
+    
+    <!-- 미니 연결 상태 표시 -->
+    <div class="mini-status" id="miniStatus"></div>
+    
+    <!-- 숨겨진 트리거 영역 (더블탭으로 대기 화면 복귀) -->
+    <div class="trigger-zone top-left" data-corner="1"></div>
+    <div class="trigger-zone top-right" data-corner="2"></div>
+    <div class="trigger-zone bottom-left" data-corner="3"></div>
+    <div class="trigger-zone bottom-right" data-corner="4"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <script>
+        let peer = null;
+        let connection = null;
+        let isConnected = false;
+        let lastReceivedImage = null;
+        
+        const codeInput = document.getElementById('codeInput');
+        const connectBtn = document.getElementById('connectBtn');
+        const statusIndicator = document.getElementById('statusIndicator');
+        const statusText = document.getElementById('statusText');
+        const waitingScreen = document.getElementById('waitingScreen');
+        const revealScreen = document.getElementById('revealScreen');
+        const handwritingDisplay = document.getElementById('handwritingDisplay');
+        const miniStatus = document.getElementById('miniStatus');
+        
+        // 저장된 코드 불러오기 (자동 재연결용)
+        const savedCode = localStorage.getItem('lastConnectionCode');
+        if (savedCode) {
+            codeInput.value = savedCode;
+            statusText.textContent = '이전 연결 코드가 입력되어 있습니다';
+        }
+        
+        // 코드 입력 자동 포커스
+        codeInput.focus();
+        
+        // 코드 입력 시 자동 대문자 변환
+        codeInput.addEventListener('input', (e) => {
+            e.target.value = e.target.value.toUpperCase();
+            if (e.target.value.length === 6) {
+                connectBtn.disabled = false;
+            }
+        });
+        
+        // Enter 키로 연결
+        codeInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter' && codeInput.value.length === 6) {
+                connectToPeer();
+            }
+        });
+        
+        // PeerJS 초기화 및 연결
+        window.connectToPeer = function() {
+            const code = codeInput.value.trim().toUpperCase();
+            
+            if (code.length !== 6) {
+                updateStatus('error', '코드는 6자리여야 합니다');
+                return;
+            }
+            
+            // 코드 저장 (자동 재연결용)
+            localStorage.setItem('lastConnectionCode', code);
+            
+            connectBtn.disabled = true;
+            updateStatus('connecting', '연결 중...');
+            
+            try {
+                // 기존 연결 정리
+                if (peer) {
+                    peer.destroy();
+                }
+                
+                // 새 Peer 생성
+                const myId = 'STAGE-' + Math.random().toString(36).substr(2, 9);
+                peer = new Peer(myId, {
+                    config: {
+                        iceServers: [
+                            { urls: 'stun:stun.l.google.com:19302' },
+                            { urls: 'stun:stun1.l.google.com:19302' }
+                        ]
+                    }
+                });
+                
+                peer.on('open', () => {
+                    console.log('Peer 준비 완료:', myId);
+                    updateStatus('connecting', '조수 앱에 연결 중...');
+                    
+                    // Sender에 연결 시도
+                    const targetId = 'SENDER-' + code;
+                    connection = peer.connect(targetId);
+                    
+                    connection.on('open', () => {
+                        isConnected = true;
+                        updateStatus('connected', '연결 성공! 손글씨 대기 중...');
+                        miniStatus.classList.add('visible');
+                        console.log('조수 앱과 연결됨');
+                    });
+                    
+                    connection.on('data', (data) => {
+                        console.log('데이터 수신:', data);
+                        
+                        if (data.type === 'handwriting' && data.image) {
+                            lastReceivedImage = data.image;
+                            displayHandwriting(data.image);
+                        }
+                    });
+                    
+                    connection.on('close', () => {
+                        isConnected = false;
+                        miniStatus.classList.remove('visible');
+                        miniStatus.classList.add('disconnected');
+                        updateStatus('error', '연결이 끊어졌습니다. 다시 연결하세요.');
+                        connectBtn.disabled = false;
+                        console.log('연결 끊김');
+                    });
+                    
+                    connection.on('error', (err) => {
+                        console.error('연결 오류:', err);
+                        updateStatus('error', '연결 오류: ' + err.message);
+                        connectBtn.disabled = false;
+                    });
+                });
+                
+                peer.on('error', (err) => {
+                    console.error('Peer 오류:', err);
+                    let errorMsg = '오류 발생';
+                    
+                    if (err.type === 'peer-unavailable') {
+                        errorMsg = '조수 앱을 찾을 수 없습니다. 코드를 확인하세요.';
+                    } else if (err.type === 'network') {
+                        errorMsg = '네트워크 연결을 확인하세요';
+                    } else {
+                        errorMsg = err.message;
+                    }
+                    
+                    updateStatus('error', errorMsg);
+                    connectBtn.disabled = false;
+                });
+                
+            } catch (error) {
+                console.error('연결 시작 오류:', error);
+                updateStatus('error', '연결 시작 실패: ' + error.message);
+                connectBtn.disabled = false;
+            }
+        };
+        
+        // 상태 업데이트
+        function updateStatus(status, message) {
+            statusIndicator.className = 'status-indicator ' + status;
+            statusText.textContent = message;
+        }
+        
+        // 손글씨 표시
+        function displayHandwriting(imageData) {
+            handwritingDisplay.src = imageData;
+            
+            // 대기 화면 숨기고 공개 화면 표시
+            waitingScreen.classList.add('hidden');
+            revealScreen.classList.add('visible');
+            
+            // 이미지 페이드인 효과
+            setTimeout(() => {
+                handwritingDisplay.classList.add('show');
+            }, 100);
+            
+            console.log('손글씨 표시 완료');
+        }
+        
+        // 대기 화면으로 복귀 (더블탭)
+        let lastTapTime = 0;
+        let tapCount = 0;
+        
+        document.querySelectorAll('.trigger-zone').forEach(zone => {
+            const handleTap = (e) => {
+                e.preventDefault();
+                const now = Date.now();
+                
+                if (now - lastTapTime < 300) {
+                    tapCount++;
+                    if (tapCount >= 2) {
+                        returnToWaiting();
+                    }
+                } else {
+                    tapCount = 1;
+                }
+                
+                lastTapTime = now;
+            };
+            
+            zone.addEventListener('touchstart', handleTap);
+            zone.addEventListener('click', handleTap);
+        });
+        
+        // 대기 화면으로 복귀
+        function returnToWaiting() {
+            revealScreen.classList.remove('visible');
+            handwritingDisplay.classList.remove('show');
+            waitingScreen.classList.remove('hidden');
+            miniStatus.classList.remove('visible');
+            
+            console.log('대기 화면으로 복귀');
+        }
+        
+        // 화면 꺼짐 방지
+        let wakeLock = null;
+        if ('wakeLock' in navigator) {
+            navigator.wakeLock.request('screen').then(lock => {
+                wakeLock = lock;
+                console.log('화면 꺼짐 방지 활성화');
+            }).catch(err => {
+                console.log('화면 꺼짐 방지 실패:', err);
+            });
+        }
+        
+        // 페이지 언로드 시 연결 정리
+        window.addEventListener('beforeunload', () => {
+            if (connection) connection.close();
+            if (peer) peer.destroy();
+        });
+    </script>
+</body>
+</html>
