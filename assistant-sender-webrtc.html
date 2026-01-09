@@ -235,8 +235,13 @@
       transform: translate(-50%, -50%);
       z-index: 2000;
       min-width: 300px;
+      pointer-events: none; /* 숨겨졌을 때 터치 방해 안 함 */
     }
-    .status-message.show { opacity: 1; transform: translate(-50%, -50%); }
+    .status-message.show { 
+      opacity: 1; 
+      transform: translate(-50%, -50%);
+      pointer-events: auto; /* 보일 때만 터치 가능 */
+    }
     .status-message.success { background: linear-gradient(135deg, #51cf66, #37b24d); color: white; }
     .status-message.error { background: linear-gradient(135deg, #ff6b6b, #fa5252); color: white; }
     .status-message.sending { background: linear-gradient(135deg, #4c6ef5, #3b5bdb); color: white; }
