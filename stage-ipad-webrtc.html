@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="mobile-web-app-capable" content="yes">
     <title>무대용 칠판 (아이패드) - WebRTC</title>
     <style>
@@ -35,6 +35,8 @@
             background: #000;
             /* 상단/하단바 영역까지 확장 */
             -webkit-overflow-scrolling: touch;
+            /* Safe area 완전히 무시 */
+            padding: env(safe-area-inset-top, 0) env(safe-area-inset-right, 0) env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0) !important;
         }
         
         /* 대기 화면: 코드 입력 */
@@ -246,34 +248,9 @@
         .trigger-zone.bottom-left { bottom: 0; left: 0; }
         .trigger-zone.bottom-right { bottom: 0; right: 0; }
         
-        /* 연결 상태 미니 인디케이터 (공개 화면에서 보임) */
+        /* 연결 상태 미니 인디케이터 - 완전히 숨김 */
         .mini-status {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            width: 15px;
-            height: 15px;
-            border-radius: 50%;
-            background: #00ff00;
-            box-shadow: 0 0 15px #00ff00;
-            z-index: 150;
-            opacity: 0;
-            transition: opacity 0.3s ease;
-        }
-        
-        .mini-status.visible {
-            opacity: 0.7;
-        }
-        
-        .mini-status.disconnected {
-            background: #ff4444;
-            box-shadow: 0 0 15px #ff4444;
-            animation: blink 1s infinite;
-        }
-        
-        @keyframes blink {
-            0%, 100% { opacity: 0.7; }
-            50% { opacity: 0.2; }
+            display: none !important;
         }
     </style>
 </head>
